@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "mcpServers": {
+    "switchboard": {
+      "command": "node",
+      "args": ["/ABS/PATH/agent-switchboard/src/mcp/index.mjs"],
+      "env": {
+        "REDIS_URL": "redis://127.0.0.1:6379"
+      }
+    }
+  }
+}

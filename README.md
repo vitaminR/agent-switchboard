@@ -154,3 +154,25 @@ This is explicitly for multi-agent communication and orchestration so your agent
 Why zod? Tool inputs are defined with zod schemas and validated automatically; the MCP SDK converts them to JSON Schema for client UIs. This makes calls from Gemini/Claude/Copilot safer with clearer errors.
 
 EOF
+
+## Clients: quick wiring
+
+- Gemini (VS Code): copy examples/gemini-settings.example.json to your user or project .gemini/settings.json and replace /ABS/PATH with your local path.
+- GitHub Copilot Chat (VS Code MCP preview): copy examples/vscode-mcp.example.json to .vscode/mcp.json and replace /ABS/PATH.
+- Claude: copy examples/claude-mcp.example.json to your MCP config location and replace /ABS/PATH.
+
+## Troubleshooting: “0 tools”
+
+- Use `command: "node"` and put the server script path in `args`.
+- Use an absolute path to `src/mcp/index.mjs` and reload your editor.
+- Ensure Redis is reachable at `REDIS_URL=redis://127.0.0.1:6379`.
+- Avoid a port conflict if Dockerized Redis is also mapping 6379 on the host.
+- If still empty, run a quick sanity start:
+  ```bash
+  REDIS_URL=redis://127.0.0.1:6379 node /ABS/PATH/agent-switchboard/src/mcp/index.mjs
+  ```
+  You should see a startup banner. Then reload your editor and list MCP tools.
+
+EOF
+
+git add examples README.md && git commit -m "docs(examples): add Gemini/Copilot/Claude MCP config examples; add troubleshooting for 0 tools and quick wiring section" && git push
