@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 /**
- * Agent Patchbay — Redis MCP Server
+ * Agent Switchboard — Redis MCP Server
  * Tools: ping, publish, xadd, xread, xgroup_create, xreadgroup, xack, xpending
- * Transport: stdio (compatible with Claude Code, Gemini Code Assist, Copilot)
+ * Transport: stdio (Claude, Gemini, Copilot-compatible)
  */
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
 import { createClient } from "redis";
 
 // Config
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 const DEFAULT_EVENTS_STREAM = process.env.AGENT_EVENTS_STREAM || "agent:events";
-const DEFAULT_SESSION_STREAM = process.env.AGENT_SESSION_STREAM || "agent:session_log";
+const DEFAULT_SESSION_STREAM = process.env.AGENT_SESSION_STREAM || "agent:session_log"; // reserved for future use
 const DEFAULT_GROUP = process.env.AGENT_CONSUMER_GROUP || "triage";
 const DEFAULT_CONSUMER = process.env.AGENT_CONSUMER_NAME || "worker-1";
 
@@ -19,134 +20,180 @@ const DEFAULT_CONSUMER = process.env.AGENT_CONSUMER_NAME || "worker-1";
 const redis = createClient({ url: REDIS_URL });
 await redis.connect();
 
-function flatKV(obj) { return Object.entries(obj).flatMap(([k,v]) => [k, String(v)]); }
-
-// MCP server
-const server = new Server({ name: "agent-switchboard-mcp", version: "0.3.0" }, { capabilities: { tools: {} } });
+// MCP server (high-level API)
+const mcp = new McpServer(
+  { name: "agent-switchboard-mcp", version: "0.3.0" },
+  { capabilities: { tools: {} } }
+);
 
 // Health
-server.tool("redis_ping", "Ping the Redis server", {
-  inputSchema: { type: "object", properties: {} }
-}, async () => ({ pong: await redis.ping() }));
+mcp.tool(
+  "redis_ping",
+  "Ping the Redis server",
+  async () => ({
+    content: [
+      { type: "text", text: JSON.stringify({ pong: await redis.ping() }) }
+    ],
+  })
+);
 
 // Pub/Sub
-server.tool("redis_publish", "Publish to a Redis pub/sub channel", {
-  inputSchema: {
-    type: "object",
-    properties: { channel: { type: "string" }, message: { type: "string" } },
-    required: ["channel","message"]
+mcp.tool(
+  "redis_publish",
+  "Publish to a Redis pub/sub channel",
+  {
+    channel: z.string(),
+    message: z.string(),
+  },
+  async ({ channel, message }) => {
+    const n = await redis.publish(channel, message);
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ok: true, subscribers: n }) },
+      ],
+    };
   }
-}, async ({ channel, message }) => {
-  const n = await redis.publish(channel, message);
-  return { ok: true, subscribers: n };
-});
+);
 
 // Streams: XADD
-server.tool("redis_xadd", "Append an entry to a Redis stream", {
-  inputSchema: {
-    type: "object",
-    properties: {
-      stream: { type: "string", default: DEFAULT_EVENTS_STREAM },
-      fields: { type: "object", description: "Key-value map" },
-      id: { type: "string", description: "Optional ID; default *" }
-    },
-    required: ["fields"]
+mcp.tool(
+  "redis_xadd",
+  "Append an entry to a Redis stream",
+  {
+    stream: z.string().optional(),
+    fields: z.record(z.unknown()),
+    id: z.string().optional(),
+  },
+  async ({ stream = DEFAULT_EVENTS_STREAM, fields, id }) => {
+    const newId = await redis.xAdd(stream, id || "*", fields);
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ok: true, stream, id: newId }) },
+      ],
+    };
   }
-}, async ({ stream = DEFAULT_EVENTS_STREAM, fields, id }) => {
-  const newId = await redis.xAdd(stream, id || "*", flatKV(fields));
-  return { ok: true, stream, id: newId };
-});
+);
 
 // Streams: XREAD (non-group)
-server.tool("redis_xread", "Read from a Redis stream (non-group)", {
-  inputSchema: {
-    type: "object",
-    properties: {
-      stream: { type: "string", default: DEFAULT_EVENTS_STREAM },
-      last_id: { type: "string", default: "$" },
-      block_ms: { type: "number", default: 0 },
-      count: { type: "number", default: 1 }
-    }
+mcp.tool(
+  "redis_xread",
+  "Read from a Redis stream (non-group)",
+  {
+    stream: z.string().optional(),
+    last_id: z.string().optional(),
+    block_ms: z.number().optional(),
+    count: z.number().optional(),
+  },
+  async ({ stream = DEFAULT_EVENTS_STREAM, last_id = "$", block_ms = 0, count = 1 }) => {
+    const opts = { COUNT: count };
+    if ((block_ms | 0) > 0) opts.BLOCK = block_ms | 0;
+    const res = await redis.xRead([{ key: stream, id: last_id }], opts);
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ok: true, data: res || [] }) },
+      ],
+    };
   }
-}, async ({ stream = DEFAULT_EVENTS_STREAM, last_id = "$", block_ms = 0, count = 1 }) => {
-  const opts = { COUNT: count };
-  if ((block_ms|0) > 0) opts.BLOCK = block_ms|0;
-  const res = await redis.xRead({ key: stream, id: last_id }, opts);
-  return { ok: true, data: res || [] };
-});
+);
 
 // Consumer groups: XGROUP CREATE
-server.tool("redis_xgroup_create", "Create a consumer group on a stream", {
-  inputSchema: {
-    type: "object",
-    properties: {
-      stream: { type: "string", default: DEFAULT_EVENTS_STREAM },
-      group: { type: "string", default: DEFAULT_GROUP },
-      id: { type: "string", default: "$" },
-      mkstream: { type: "boolean", default: true }
+mcp.tool(
+  "redis_xgroup_create",
+  "Create a consumer group on a stream",
+  {
+    stream: z.string().optional(),
+    group: z.string().optional(),
+    id: z.string().optional(),
+    mkstream: z.boolean().optional(),
+  },
+  async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP, id = "$", mkstream = true }) => {
+    try {
+      await redis.xGroupCreate(stream, group, id, { MKSTREAM: !!mkstream });
+      return {
+        content: [
+          { type: "text", text: JSON.stringify({ ok: true, stream, group, id }) },
+        ],
+      };
+    } catch (e) {
+      if (String(e).includes("BUSYGROUP")) {
+        return {
+          content: [
+            { type: "text", text: JSON.stringify({ ok: true, stream, group, id, note: "Group already exists" }) },
+          ],
+        };
+      }
+      throw e;
     }
   }
-}, async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP, id = "$", mkstream = true }) => {
-  try {
-    await redis.xGroupCreate(stream, group, id, { MKSTREAM: !!mkstream });
-    return { ok: true, stream, group, id };
-  } catch (e) {
-    if (String(e).includes("BUSYGROUP")) return { ok: true, stream, group, id, note: "Group already exists" };
-    throw e;
-  }
-});
+);
 
 // XREADGROUP
-server.tool("redis_xreadgroup", "Read from a stream using a consumer group", {
-  inputSchema: {
-    type: "object",
-    properties: {
-      stream: { type: "string", default: DEFAULT_EVENTS_STREAM },
-      group: { type: "string", default: DEFAULT_GROUP },
-      consumer: { type: "string", default: DEFAULT_CONSUMER },
-      count: { type: "number", default: 1 },
-      block_ms: { type: "number", default: 15000 },
-      id: { type: "string", default: ">" }
-    }
+mcp.tool(
+  "redis_xreadgroup",
+  "Read from a stream using a consumer group",
+  {
+    stream: z.string().optional(),
+    group: z.string().optional(),
+    consumer: z.string().optional(),
+    count: z.number().optional(),
+    block_ms: z.number().optional(),
+    id: z.string().optional(),
+  },
+  async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP, consumer = DEFAULT_CONSUMER, count = 1, block_ms = 15000, id = ">" }) => {
+    const opts = { COUNT: count };
+    if ((block_ms | 0) > 0) opts.BLOCK = block_ms | 0;
+    const res = await redis.xReadGroup(group, consumer, [{ key: stream, id }], opts);
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ok: true, data: res || [] }) },
+      ],
+    };
   }
-}, async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP, consumer = DEFAULT_CONSUMER, count = 1, block_ms = 15000, id = ">" }) => {
-  const opts = { GROUP: { name: group, consumer }, COUNT: count };
-  if ((block_ms|0) > 0) opts.BLOCK = block_ms|0;
-  const res = await redis.xRead({ key: stream, id }, opts);
-  return { ok: true, data: res || [] };
-});
+);
 
 // XACK
-server.tool("redis_xack", "Acknowledge one or more messages in a group", {
-  inputSchema: {
-    type: "object",
-    properties: {
-      stream: { type: "string", default: DEFAULT_EVENTS_STREAM },
-      group: { type: "string", default: DEFAULT_GROUP },
-      ids: { type: "array", items: { type: "string" } }
-    },
-    required: ["ids"]
+mcp.tool(
+  "redis_xack",
+  "Acknowledge one or more messages in a group",
+  {
+    stream: z.string().optional(),
+    group: z.string().optional(),
+    ids: z.array(z.string()),
+  },
+  async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP, ids }) => {
+    const count = await redis.xAck(stream, group, ...ids);
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ok: true, acknowledged: count }) },
+      ],
+    };
   }
-}, async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP, ids }) => {
-  const count = await redis.xAck(stream, group, ...ids);
-  return { ok: true, acknowledged: count };
-});
+);
 
 // XPENDING
-server.tool("redis_xpending", "Inspect pending messages for a group", {
-  inputSchema: {
-    type: "object",
-    properties: {
-      stream: { type: "string", default: DEFAULT_EVENTS_STREAM },
-      group: { type: "string", default: DEFAULT_GROUP }
-    }
+mcp.tool(
+  "redis_xpending",
+  "Inspect pending messages for a group",
+  {
+    stream: z.string().optional(),
+    group: z.string().optional(),
+  },
+  async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP }) => {
+    const info = await redis.xPending(stream, group);
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ok: true, pending: info }) },
+      ],
+    };
   }
-}, async ({ stream = DEFAULT_EVENTS_STREAM, group = DEFAULT_GROUP }) => {
-  const info = await redis.xPending(stream, group);
-  return { ok: true, pending: info };
-});
+);
 
 // Start
 const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error("[agent-switchboard] MCP server started.", { REDIS_URL, DEFAULT_EVENTS_STREAM, DEFAULT_GROUP, DEFAULT_CONSUMER });
+await mcp.connect(transport);
+console.error("[agent-switchboard] MCP server started.", {
+  REDIS_URL,
+  DEFAULT_EVENTS_STREAM,
+  DEFAULT_GROUP,
+  DEFAULT_CONSUMER,
+});
