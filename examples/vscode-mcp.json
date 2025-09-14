@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "redis-bus": {
+      "command": "node",
+      "args": [
+        "/ABS/PATH/agent-switchboard/src/mcp/index.mjs"
+      ]
+    },
+    "redis-bridge-remote": {
+      "url": "http://localhost:8002/mcp"
+    }
+  }
+}

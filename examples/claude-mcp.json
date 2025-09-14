@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "redis-bus": {
+      "type": "stdio",
+      "command": "/ABS/PATH/agent-switchboard/src/mcp/index.mjs",
+      "args": [],
+      "env": {}
+    },
+    "redis-bridge": {
+      "type": "http",
+      "url": "http://localhost:8002/mcp"
+    }
+  }
+}

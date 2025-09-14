@@ -1,0 +1,9 @@
+
+# FastAPI REST bridge (non-MCP agents)
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install --no-cache-dir fastapi uvicorn[standard] redis==5.0.8 aioredis==2.0.1
+COPY bridge/fastapi /app/bridge/fastapi
+ENV REDIS_URL=redis://redis:6379
+EXPOSE 8002
+CMD ["uvicorn", "bridge.fastapi.main:app", "--host", "0.0.0.0", "--port", "8002"]

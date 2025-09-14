@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "redis-bus": {
+      "command": "/ABS/PATH/agent-switchboard/src/mcp/index.mjs",
+      "args": [],
+      "env": {
+        "REDIS_URL": "redis://127.0.0.1:6379",
+        "AGENT_EVENTS_STREAM": "agent:events",
+        "AGENT_SESSION_STREAM": "agent:session_log",
+        "AGENT_CONSUMER_GROUP": "triage",
+        "AGENT_CONSUMER_NAME": "worker-1"
+      }
+    },
+    "redis-bridge-remote": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://localhost:8002/mcp"
+      ]
+    }
+  }
+}

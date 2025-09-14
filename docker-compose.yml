@@ -1,0 +1,28 @@
+
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+  mcp-bus:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bus
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AGENT_EVENTS_STREAM=agent:events
+      - AGENT_SESSION_STREAM=agent:session_log
+      - AGENT_CONSUMER_GROUP=triage
+      - AGENT_CONSUMER_NAME=worker-1
+    depends_on: [redis]
+  bridge-rest:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bridge
+    ports:
+      - "8002:8002"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - AGENT_EVENTS_STREAM=agent:events
+    depends_on: [redis]
