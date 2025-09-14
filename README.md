@@ -1,12 +1,12 @@
 # Agent switchboard — Redis + MCP ⚡️
 
-**Build the future of agentic communication.** Agent Patchbay is a **Swiss‑army knife** for connecting agents, tools, and humans using **Redis Streams** and the **Model Context Protocol (MCP)**. It ships with:
+**Build the future of agentic communication.** Agent SwitchBoard is a **Swiss‑army knife** for connecting agents, tools, and humans using **Redis Streams** and the **Model Context Protocol (MCP)**. It ships with:
 - A production‑ready **MCP server** (Node) exposing Redis as a durable agent bus.
 - A **REST bridge** (FastAPI) so **non‑MCP** agents can still publish/consume.
 - **Docker Compose** for one‑command bring‑up (Redis + MCP + Bridge).
 - Ready‑to‑paste **wiring examples** for **Gemini Code Assist**, **Claude Code**, and **GitHub Copilot**.
 
-> **Why this repo?** Fragmented agent comms slow teams down. MCP standardizes *how* agents talk to tools; Redis gives you a fast, durable, observable message bus. Patchbay glues them together with pragmatic defaults.
+> **Why this repo?** Fragmented agent comms slow teams down. MCP standardizes *how* agents talk to tools; Redis gives you a fast, durable, observable message bus. SwitchBoard glues them together with pragmatic defaults.
 
 ---
 
@@ -77,7 +77,7 @@ MCP Clients (Claude | Gemini | Copilot | OpenAI Agents)
 
 ---
 
-## 5. For non‑MCP agents: the **Patchbay** 🩹
+## 5. For non‑MCP agents: the **SwitchBoard** 🩹
 - **REST publish**: `POST /publish` with `{ "fields": {...} }` → writes to `agent:events`.  
 - **CLI feeders**: wrap existing shell scripts to post tasks & acks.  
 - **Webhook sinks**: add small subscribers to forward Streams → webhooks/Slack.  
@@ -107,7 +107,7 @@ MCP Clients (Claude | Gemini | Copilot | OpenAI Agents)
 ---
 
 ## 8. Contributing
-PRs welcome! Please open an issue with your use‑case (agent flavor, toolchain, cloud). We’ll grow this into the **community “patchbay”** for agent comms.
+PRs welcome! Please open an issue with your use‑case (agent flavor, toolchain, cloud). We’ll grow this into the **community “SwitchBoard”** for agent comms.
 
 ---
 
