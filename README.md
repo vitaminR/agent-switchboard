@@ -1,4 +1,4 @@
-# Agent Patchbay — Redis + MCP ⚡️
+# Agent switchboard — Redis + MCP ⚡️
 
 **Build the future of agentic communication.** Agent Patchbay is a **Swiss‑army knife** for connecting agents, tools, and humans using **Redis Streams** and the **Model Context Protocol (MCP)**. It ships with:
 - A production‑ready **MCP server** (Node) exposing Redis as a durable agent bus.
