@@ -120,3 +120,37 @@ PRs welcome! Please open an issue with your use‑case (agent flavor, toolchain,
 ---
 
 **License:** MIT
+
+## What this is: a switchboard + mailroom + Jira for agents
+
+This repo is a communication fabric for multiple agents:
+- Switchboard: routes calls between agents and tools via MCP tools.
+- Mailroom: Redis Streams give durable in/out trays with IDs, acks, and replay.
+- Jira for agents: simple task states your agents can coordinate around.
+
+Suggested task states:
+- backlog — queued work not yet claimed
+- in-progress — currently being worked on
+- up-for-vote — needs consensus/approval
+- blocked — waiting on a dependency or human
+
+Practical mapping:
+- Use a durable stream (default `agent:events`) to post tasks: `{ type: "task", status, title, payload, reply_to }`.
+- Use consumer groups (e.g., `triage`) for horizontal workers and acknowledgements.
+- Use Pub/Sub channels for ephemeral signals (e.g., `vote:approve:<taskId>`).
+- Correlate results via `reply_to` and message IDs; store outputs back to Streams for audit.
+
+This is explicitly for multi-agent communication and orchestration so your agents can talk, coordinate, and ship work together.
+
+## Prereqs & dependencies
+
+- Node.js 18+ (tested with Node 22)
+- Redis 6+
+- NPM dependencies (already included):
+  - @modelcontextprotocol/sdk ^1.18.x — MCP v1 server API (stdio transport)
+  - zod ^3 — tool input schemas and runtime validation
+  - redis ^4 — node-redis client for Streams and Pub/Sub
+
+Why zod? Tool inputs are defined with zod schemas and validated automatically; the MCP SDK converts them to JSON Schema for client UIs. This makes calls from Gemini/Claude/Copilot safer with clearer errors.
+
+EOF
